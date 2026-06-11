@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Cyber Lab Certification Pro</title>
+<style>
+body{font-family:Arial;background:#0f172a;color:#e2e8f0;padding:20px}
+.card{background:#1e293b;padding:20px;border-radius:12px;margin-bottom:20px}
+button{padding:10px;background:#38bdf8;border:none;border-radius:8px;margin-top:10px;cursor:pointer}
+input,select,textarea{width:100%;padding:10px;margin-top:10px;border-radius:8px;border:none}
+.terminal{background:black;color:#00ff00;padding:10px;height:140px;overflow:auto;font-family:monospace}
+.hidden{display:none}
+</style>
+</head>
+<body>
+
+<h1>Cybersecurity Certification Lab</h1>
+
+<div class="card">
+<h2>Student Login</h2>
+<input id="studentName" placeholder="Enter your name">
+<input id="courseCode" placeholder="Enter course or section code">
+<select id="difficulty">
+<option value="easy">Easy</option>
+<option value="medium">Medium</option>
+<option value="hard">Hard</option>
+</select>
+<button onclick="startLab()">Start Lab</button>
+</div>
+
+<div id="lab" class="hidden">
+<div class="card">
+<div id="timer">Time: 300</div>
+<div id="score">Score: 0</div>
+</div>
+
+<div class="card">
+<h2>Terminal</h2>
+<div class="terminal" id="terminal"></div>
+<input id="cmd">
+<button onclick="runCmd()">Run</button>
+</div>
+
+<div class="card">
+<h2>Flag Challenge</h2>
+<p>Enter flag from assigned lab</p>
+<input id="flagInput">
+<button onclick="checkFlag()">Submit Flag</button>
+</div>
+
+<div class="card">
+<h2>Submit</h2>
+<button onclick="finish()">Finish Exam</button>
+</div>
+
+</div>
+
+<div id="certificate" class="hidden card">
+<h2>Certificate</h2>
+<div id="certText"></div>
+<button onclick="downloadPDF()">Download PDF</button>
+<button onclick="viewReport()">View Exam Report</button>
+</div>
+
+<div id="report" class="hidden card">
+<h2>Exam Report</h2>
+<div id="reportData"></div>
+</div>
+
+
+<div class="card">
+<h2>Instructor Dashboard</h2>
+<button onclick="viewLogs()">View Logs</button>
+<button onclick="exportAll()">Export All Logs</button>
+<div id="dashboard"></div>
+</div>
+
+
+<script>
+let sessionID=''
+let score=0
+let time=300
+let logs=[]
+let breakdown={network:0,identity:0,dns:0}
+function generateSession(){
+return 'SID'+Math.random().toString(36).substring(2,10)
+}
+
+
+function currentSeed(){
+let d=new Date()
+return d.getFullYear()+"-"+d.getMonth()+"-"+d.getDate()
+}
+
+
+function generateFlags(){
+let seed=currentSeed()
+return [
+{flag:'thm{network_'+seed+'}',points:30,skill:'network',room:'https://tryhackme.com/room/networkfundamentals'},
+{flag:'thm{user_'+seed+'}',points:20,skill:'identity',room:'https://tryhackme.com/room/linuxfundamentals1'},
+{flag:'thm{dns_'+seed+'}',points:30,skill:'dns',room:'https://tryhackme.com/room/dnsindetail'}
+]
+}
+
+
+let flags=generateFlags()
+
+
+function startLab(){
+let name=document.getElementById('studentName').value
+let course=document.getElementById('courseCode').value
+if(!name||!course){alert('Missing info');return}
+
+
+sessionID=generateSession()
+logs.push('SESSION:'+sessionID)
+logs.push('USER:'+name)
+logs.push('COURSE:'+course)
+logs.push('SEED:'+currentSeed())
+
+
+document.getElementById('lab').classList.remove('hidden')
+}
+
+function runCmd(){
+let cmd=document.getElementById('cmd').value.toLowerCase()
+let term=document.getElementById('terminal')
+logs.push('CMD:'+cmd)
+
+if(cmd.includes('ping')){term.innerHTML+='> ping success<br>';breakdown.network+=5}
+else if(cmd.includes('whoami')){term.innerHTML+='> user identity<br>';breakdown.identity+=5}
+else if(cmd.includes('nslookup')){term.innerHTML+='> dns resolved<br>';breakdown.dns+=5}
+else{term.innerHTML+='> error<br>'}
+}
+
+function checkFlag(){
+let f=document.getElementById('flagInput').value
+logs.push('FLAG:'+f)
+
+for(let i=0;i<flags.length;i++){
+if(f==flags[i].flag){
+score+=flags[i].points
+breakdown[flags[i].skill]+=flags[i].points
+alert('Correct')
+return
+}
+}
+alert('Incorrect')
+}
+
+setInterval(()=>{
+if(time>0){time--;document.getElementById('timer').innerText='Time: '+time}
+},1000)
+function finish(){
+logs.push('FINAL:'+score)
+localStorage.setItem(sessionID,JSON.stringify({logs:logs,breakdown:breakdown}))
+document.getElementById('lab').classList.add('hidden')
+document.getElementById('certificate').classList.remove('hidden')
+let name=document.getElementById('studentName').value
+
+if(score>=60){
+document.getElementById('certText').innerText=name+' PASSED '+score+' Session '+sessionID
+}else{
+document.getElementById('certText').innerText=name+' FAILED '+score
+}
+}
+
+
+function downloadPDF(){
+let text=document.getElementById('certText').innerText
+let win=window.open('', '', 'height=600,width=800')
+win.document.write('<html><body><h1>'+text+'</h1></body></html>')
+win.print()
+}
+
+
+function viewLogs(){
+let out=''
+for(let i=0;i<localStorage.length;i++){
+let key=localStorage.key(i)
+let data=localStorage.getItem(key)
+out+=key+'<br>'+data+'<br><br>'
+}
+document.getElementById('dashboard').innerHTML=out
+}
+
+
+function exportAll(){
+let all=''
+for(let i=0;i<localStorage.length;i++){
+let key=localStorage.key(i)
+all+=key+":"+localStorage.getItem(key)+'
+'
+}
+let blob=new Blob([all],{type:'text/plain'})
+let a=document.createElement('a')
+a.href=URL.createObjectURL(blob)
+a.download='all_logs.txt'
+a.click()
+}
+
+
+function viewReport(){
+let last=localStorage.getItem(sessionID)
+if(!last){return}
+let data=JSON.parse(last)
+let b=data.breakdown
+let html='Network: '+b.network+'<br>'
+html+='Identity: '+b.identity+'<br>'
+html+='DNS: '+b.dns+'<br>'
+html+='Total: '+score
+
+
+document.getElementById('reportData').innerHTML=html
+
+
+document.getElementById('report').classList.remove('hidden')
+}
+</script>
+
+</body>
